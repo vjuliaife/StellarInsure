@@ -3,11 +3,14 @@
 from decimal import Decimal
 import os
 import time
+import logging
 
 from sqlalchemy.orm import Session
 
 from .database import SessionLocal
 from .models import Policy, PolicyStatus, PolicyType, User
+
+logger = logging.getLogger(__name__)
 
 
 def seed(db: Session) -> None:
@@ -70,7 +73,7 @@ def main() -> None:
     db = SessionLocal()
     try:
         seed(db)
-        print("Staging seed completed successfully.")
+        logger.info("Staging seed completed successfully.")
     finally:
         db.close()
 

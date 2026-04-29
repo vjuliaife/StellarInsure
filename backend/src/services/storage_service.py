@@ -4,11 +4,13 @@ import time
 import hmac
 import hashlib
 import base64
+import logging
 from typing import Optional, List
 from fastapi import UploadFile, HTTPException, status
 from ..config import get_settings
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 class StorageService:
     def __init__(self):
@@ -143,7 +145,7 @@ class StorageService:
                 os.remove(full_path)
             except Exception as e:
                 # Log error but don't fail, file might be already gone or locked
-                print(f"Error deleting file {full_path}: {e}")
+                logger.warning("Error deleting file %s: %s", full_path, str(e))
 
 # Singleton instance
 storage_service = StorageService()

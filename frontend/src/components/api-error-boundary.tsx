@@ -2,6 +2,7 @@
 
 import React, { ErrorInfo, ReactNode, useCallback, useState } from "react";
 import { Icon } from "./icon";
+import { logError } from "@/lib/error-logger";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -43,7 +44,10 @@ class ApiErrorBoundaryInner extends React.Component<
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("[ApiErrorBoundary]", error, errorInfo);
+    logError(error, {
+      componentStack: errorInfo.componentStack,
+      tags: { component: "ApiErrorBoundary" }
+    });
     this.props.onError?.(error, errorInfo);
   }
 

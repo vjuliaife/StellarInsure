@@ -23,6 +23,7 @@ import { TriggerConditionBuilder } from "@/components/trigger-condition-builder"
 import { PremiumEstimate, type PremiumBreakdown } from "@/components/premium-estimate";
 import { ValidationSummary, type ValidationError } from "@/components/validation-summary";
 import { signTransaction } from "@stellar/freighter-api";
+import { logError } from "@/lib/error-logger";
 
 type CreateStep = 0 | 1 | 2 | 3;
 
@@ -472,7 +473,9 @@ export default function CreatePolicyPageClient() {
       const errorSteps = [...updatedSteps];
       errorSteps[0] = { ...errorSteps[0], status: "failed" };
       setTxSteps(errorSteps);
-      console.error(error);
+      logError(error instanceof Error ? error : new Error(String(error)), {
+        tags: { component: "CreatePolicyPageClient", action: "simulateSubmit" }
+      });
     }
   }
 
