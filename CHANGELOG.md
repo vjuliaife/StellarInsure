@@ -1,3 +1,10 @@
+# [1.26.0](https://github.com/ChaoLing140/StellarInsure/compare/v1.25.0...v1.26.0) (2026-05-29)
+
+
+### Features
+
+* tighten radius tokens, fix dark accent contrast, add hero preview, flush features section ([01fd4fb](https://github.com/ChaoLing140/StellarInsure/commit/01fd4fb0e9a49092b328d51a812e13065a847cd0)), closes [#319](https://github.com/ChaoLing140/StellarInsure/issues/319) [#320](https://github.com/ChaoLing140/StellarInsure/issues/320) [#321](https://github.com/ChaoLing140/StellarInsure/issues/321) [#323](https://github.com/ChaoLing140/StellarInsure/issues/323)
+
 # [1.25.0](https://github.com/ChaoLing140/StellarInsure/compare/v1.24.1...v1.25.0) (2026-05-28)
 
 
