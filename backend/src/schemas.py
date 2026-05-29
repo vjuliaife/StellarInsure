@@ -190,6 +190,7 @@ class PolicyListResponse(BaseModel):
     page: int = Field(..., description="Current page number", example=1)
     per_page: int = Field(..., description="Number of items per page", example=10)
     has_next: bool = Field(..., description="Whether there are more pages available", example=True)
+    total_pages: int = Field(..., description="Total number of pages", example=10)
 
 
 class PolicyResponse(BaseModel):
@@ -369,3 +370,12 @@ class WebhookDeliveryResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class WebhookDeliveryListResponse(BaseModel):
+    deliveries: List[WebhookDeliveryResponse] = Field(..., description="List of webhook deliveries")
+    total: int = Field(..., description="Total number of deliveries", example=100)
+    page: int = Field(..., description="Current page number", example=1)
+    per_page: int = Field(..., description="Number of items per page", example=20)
+    has_next: bool = Field(..., description="Whether there are more pages available", example=True)
+    total_pages: int = Field(..., description="Total number of pages", example=5)

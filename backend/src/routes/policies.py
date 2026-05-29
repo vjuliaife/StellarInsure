@@ -1,4 +1,5 @@
 import logging
+import math
 from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -17,7 +18,8 @@ from ..dependencies import get_current_active_user
 from ..errors import (
     PolicyNotFoundError,
     InvalidPolicyTimeRangeError,
-    PolicyNotEligibleForClaimError
+    PolicyNotEligibleForClaimError,
+    PolicyAlreadyTerminalError
 )
 from ..cache import cache_get, cache_set, invalidate_policy_cache
 from ..services.webhook_service import dispatch_webhook_event
@@ -129,7 +131,8 @@ async def get_user_policies(
         query = query.filter(Policy.policy_type == policy_type)
     
     total = query.count()
-    
+    total_pages = math.ceil(total / per_page) if per_page > 0 else 0
+
     offset = (page - 1) * per_page
     policies = query.order_by(Policy.created_at.desc()).offset(offset).limit(per_page).all()
     
@@ -156,7 +159,8 @@ async def get_user_policies(
         total=total,
         page=page,
         per_page=per_page,
-        has_next=(offset + per_page) < total
+        has_next=(offset + per_page) < total,
+        total_pages=total_pages
     )
     
     cache_set(cache_key, result.model_dump(mode="json"))
@@ -228,7 +232,11 @@ async def cancel_policy(
     
     if policy is None:
         raise PolicyNotFoundError()
-    
+
+    TERMINAL_STATUSES = {PolicyStatus.cancelled, PolicyStatus.expired, PolicyStatus.claim_approved, PolicyStatus.claim_rejected}
+    if policy.status in TERMINAL_STATUSES:
+        raise PolicyAlreadyTerminalError()
+
     policy.status = PolicyStatus.cancelled
     db.commit()
     

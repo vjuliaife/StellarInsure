@@ -1,4 +1,5 @@
 """Webhook management endpoints for StellarInsure API."""
+import math
 import secrets
 from typing import List
 
@@ -14,6 +15,7 @@ from ..schemas import (
     WebhookUpdateRequest,
     WebhookResponse,
     WebhookDeliveryResponse,
+    WebhookDeliveryListResponse,
     MessageResponse,
 )
 
@@ -183,7 +185,7 @@ async def delete_webhook(
 
 @router.get(
     "/{webhook_id}/deliveries",
-    response_model=List[WebhookDeliveryResponse],
+    response_model=WebhookDeliveryListResponse,
     summary="List webhook deliveries",
     description="Returns the delivery history for a specific webhook, ordered by most recent first.",
     responses={
@@ -207,6 +209,13 @@ async def list_webhook_deliveries(
     if webhook is None:
         raise WebhookNotFoundError()
 
+    total = (
+        db.query(WebhookDelivery)
+        .filter(WebhookDelivery.webhook_id == webhook_id)
+        .count()
+    )
+    total_pages = math.ceil(total / per_page) if per_page > 0 else 0
+
     offset = (page - 1) * per_page
     deliveries = (
         db.query(WebhookDelivery)
@@ -217,15 +226,22 @@ async def list_webhook_deliveries(
         .all()
     )
 
-    return [
-        WebhookDeliveryResponse(
-            id=d.id,
-            webhook_id=d.webhook_id,
-            event_type=d.event_type,
-            response_status=d.response_status,
-            success=d.success,
-            attempts=d.attempts,
-            created_at=d.created_at,
-        )
-        for d in deliveries
-    ]
+    return WebhookDeliveryListResponse(
+        deliveries=[
+            WebhookDeliveryResponse(
+                id=d.id,
+                webhook_id=d.webhook_id,
+                event_type=d.event_type,
+                response_status=d.response_status,
+                success=d.success,
+                attempts=d.attempts,
+                created_at=d.created_at,
+            )
+            for d in deliveries
+        ],
+        total=total,
+        page=page,
+        per_page=per_page,
+        has_next=(offset + per_page) < total,
+        total_pages=total_pages,
+    )

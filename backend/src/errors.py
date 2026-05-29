@@ -47,6 +47,10 @@ class InsufficientCoverageError(StellarInsureError):
     def __init__(self, detail: str = "Claim amount exceeds remaining coverage"):
         super().__init__(status.HTTP_400_BAD_REQUEST, detail, "POLICY_003")
 
+class PolicyAlreadyTerminalError(StellarInsureError):
+    def __init__(self, detail: str = "Policy is already in a terminal state"):
+        super().__init__(status.HTTP_400_BAD_REQUEST, detail, "POLICY_004")
+
 # Claim Errors (CLAIM_xxx)
 class ClaimNotFoundError(StellarInsureError):
     def __init__(self, detail: str = "Claim not found"):
