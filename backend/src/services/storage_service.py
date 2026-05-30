@@ -13,6 +13,14 @@ from ..errors import InvalidFileTypeError, FileTooLargeError
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
+_MAGIC = {
+    ".jpg":  b"\xff\xd8\xff",
+    ".jpeg": b"\xff\xd8\xff",
+    ".png":  b"\x89PNG",
+    ".pdf":  b"%PDF",
+}
+
+
 class StorageService:
     def __init__(self):
         self.upload_dir = settings.upload_dir
@@ -39,11 +47,19 @@ class StorageService:
                 detail=f"Content type {file.content_type} not allowed. Allowed: {', '.join(self.allowed_content_types)}"
             )
 
+    def _validate_signature(self, content: bytes, ext: str):
+        expected = _MAGIC.get(ext)
+        if expected and not content.startswith(expected):
+            raise InvalidFileTypeError(detail="File content does not match its declared type")
+
     async def upload_file(self, file: UploadFile, folder: str = "general") -> str:
         self.validate_file(file)
 
-        # Read content to check size
+        # Read content to validate signature and check size
         content = await file.read()
+        ext = os.path.splitext(file.filename)[1].lower() if file.filename else ""
+        self._validate_signature(content, ext)
+
         if len(content) > self.max_size:
             raise FileTooLargeError(
                 detail=f"File size exceeds limit of {self.max_size / (1024 * 1024):.1f}MB"

@@ -931,7 +931,12 @@ class TestApiHealth:
         assert resp.status_code == 200
         assert "message" in resp.json()
 
-    def test_health_endpoint_returns_healthy(self, client):
+    def test_health_endpoint_returns_ok(self, client):
         resp = client.get("/health")
         assert resp.status_code == 200
-        assert resp.json()["status"] == "healthy"
+        assert resp.json() == {"status": "ok"}
+
+    def test_ready_endpoint_returns_healthy(self, client):
+        resp = client.get("/ready")
+        assert resp.status_code == 200
+        assert "dependencies" in resp.json()

@@ -145,7 +145,7 @@ def test_create_claim_with_file_upload(
         "/claims/upload",
         headers=auth_headers,
         data={"policy_id": str(policy.id), "claim_amount": "275.0"},
-        files={"file": ("proof.png", BytesIO(b"png"), "image/png")},
+        files={"file": ("proof.png", BytesIO(b"\x89PNG\r\n\x1a\ndata"), "image/png")},
     )
 
     assert response.status_code == 201

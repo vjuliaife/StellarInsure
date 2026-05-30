@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     webhook_max_retries: int = 3
     webhook_delivery_timeout: int = 30
     webhook_max_per_user: int = 10
+    webhook_backoff_base: float = 1.0
 
     # Logging
     log_level: str = "INFO"

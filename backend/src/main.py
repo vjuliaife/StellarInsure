@@ -142,38 +142,44 @@ app.include_router(transactions_router)
 
 setup_rate_limiting(app)
 
-@app.get("/health", summary="Health check", description="Checks the health status of the API service and its dependencies.")
+@app.get("/health", summary="Health check", description="Lightweight process liveness check.")
 async def health():
-    health_status = {"status": "healthy", "dependencies": {}}
-    
+    return {"status": "ok"}
+
+
+@app.get("/ready", summary="Readiness check", description="Checks API dependencies before accepting traffic.")
+async def ready():
+    ready_status = {"status": "ready", "dependencies": {}}
+
     # Check DB connection
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-            health_status["dependencies"]["database"] = "connected"
+            ready_status["dependencies"]["database"] = "connected"
     except Exception as e:
-        health_status["status"] = "unhealthy"
-        health_status["dependencies"]["database"] = f"error: {str(e)}"
-    
+        ready_status["status"] = "unhealthy"
+        ready_status["dependencies"]["database"] = f"error: {str(e)}"
+
     # Check Redis when enabled
     if settings.redis_enabled:
         try:
             redis_client = get_redis_client()
             if redis_client is not None:
                 redis_client.ping()
-                health_status["dependencies"]["redis"] = "connected"
+                ready_status["dependencies"]["redis"] = "connected"
             else:
-                health_status["dependencies"]["redis"] = "unhealthy"
-                if health_status["status"] != "unhealthy":
-                    health_status["status"] = "degraded"
+                ready_status["dependencies"]["redis"] = "unhealthy"
+                if ready_status["status"] != "unhealthy":
+                    ready_status["status"] = "degraded"
         except Exception as e:
-            health_status["dependencies"]["redis"] = f"error: {str(e)}"
-            if health_status["status"] != "unhealthy":
-                health_status["status"] = "degraded"
+            ready_status["dependencies"]["redis"] = f"error: {str(e)}"
+            if ready_status["status"] != "unhealthy":
+                ready_status["status"] = "degraded"
     else:
-        health_status["dependencies"]["redis"] = "disabled"
-        
-    return health_status
+        ready_status["dependencies"]["redis"] = "disabled"
+
+    http_status = 200 if ready_status["status"] == "ready" else 503
+    return JSONResponse(content=ready_status, status_code=http_status)
 
 @app.exception_handler(StellarInsureError)
 async def stellar_insure_error_handler(request: Request, exc: StellarInsureError):

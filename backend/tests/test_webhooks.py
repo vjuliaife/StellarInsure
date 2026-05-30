@@ -274,6 +274,39 @@ class TestWebhookService:
         assert deliveries[0].success is False
         assert deliveries[0].attempts == 3  # max retries
 
+    @patch("src.services.webhook_service.httpx.Client")
+    def test_retry_uses_exponential_backoff(self, mock_client_cls, db_session, auth_user):
+        """Retry attempts should be separated by exponential backoff delays."""
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        mock_response.text = "Server Error"
+        mock_client_instance = MagicMock()
+        mock_client_instance.__enter__ = MagicMock(return_value=mock_client_instance)
+        mock_client_instance.__exit__ = MagicMock(return_value=False)
+        mock_client_instance.post.return_value = mock_response
+        mock_client_cls.return_value = mock_client_instance
+
+        webhook = Webhook(
+            user_id=auth_user.id,
+            url="https://example.com/backoff-hook",
+            secret="test-secret",
+            event_types="claim.created",
+        )
+        db_session.add(webhook)
+        db_session.commit()
+
+        mock_sleep = MagicMock()
+        from src.services.webhook_service import _deliver_single
+        import json
+        from datetime import datetime
+
+        payload_str = json.dumps({"event": "claim.created", "timestamp": datetime.utcnow().isoformat(), "data": {"claim_id": 1}})
+        _deliver_single(webhook, "claim.created", payload_str, db_session, _sleep=mock_sleep)
+
+        assert mock_sleep.call_count == 2
+        assert mock_sleep.call_args_list[0][0][0] == 1.0
+        assert mock_sleep.call_args_list[1][0][0] == 2.0
+
 
 class TestWebhookEventTypes:
     """Test webhook event type validation."""

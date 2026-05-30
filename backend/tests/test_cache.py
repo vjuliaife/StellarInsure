@@ -193,11 +193,49 @@ class TestClaimCacheInvalidation:
                 "/claims/upload",
                 headers=auth_headers,
                 data={"policy_id": str(policy.id), "claim_amount": "275.0"},
-                files={"file": ("proof.png", BytesIO(b"png"), "image/png")},
+                files={"file": ("proof.png", BytesIO(b"\x89PNG\r\n\x1a\ndata"), "image/png")},
             )
 
             assert response.status_code == 201
             mock_invalidate.assert_called_once_with(auth_user.id)
+
+    def test_approve_claim_invalidates_policy_cache(
+        self, client, admin_headers, auth_user, policy_factory, claim_factory
+    ):
+        """Approving a claim should trigger policy cache invalidation for the policyholder."""
+        policy = policy_factory(auth_user, coverage_amount=1000.0)
+        claim = claim_factory(auth_user, policy, claim_amount=100.0)
+
+        import src.routes.claims as claims_module
+        from unittest.mock import patch
+
+        with patch.object(claims_module, "invalidate_policy_cache") as mock_invalidate:
+            response = client.patch(
+                f"/claims/{claim.id}?approved=true",
+                headers=admin_headers,
+            )
+
+            assert response.status_code == 200
+            mock_invalidate.assert_called_once_with(policy.policyholder_id)
+
+    def test_reject_claim_invalidates_policy_cache(
+        self, client, admin_headers, auth_user, policy_factory, claim_factory
+    ):
+        """Rejecting a claim should trigger policy cache invalidation for the policyholder."""
+        policy = policy_factory(auth_user, coverage_amount=1000.0)
+        claim = claim_factory(auth_user, policy, claim_amount=100.0)
+
+        import src.routes.claims as claims_module
+        from unittest.mock import patch
+
+        with patch.object(claims_module, "invalidate_policy_cache") as mock_invalidate:
+            response = client.patch(
+                f"/claims/{claim.id}?approved=false",
+                headers=admin_headers,
+            )
+
+            assert response.status_code == 200
+            mock_invalidate.assert_called_once_with(policy.policyholder_id)
 
     def test_create_claim_failure_does_not_invalidate_cache(
         self, client, auth_user, auth_headers

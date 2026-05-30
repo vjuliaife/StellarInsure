@@ -31,11 +31,11 @@ class TestStorageService:
 
     @pytest.mark.asyncio
     async def test_upload_valid_file(self, storage_service):
-        content = b"test content"
+        content = b"\x89PNG\r\n\x1a\ndata"
         file = UploadFile(filename="test.png", file=BytesIO(content), headers={"content-type": "image/png"})
-        
+
         path = await storage_service.upload_file(file, folder="test")
-        
+
         assert path.startswith("test/")
         assert path.endswith(".png")
         assert os.path.exists(os.path.join(storage_service.upload_dir, path))
@@ -44,7 +44,7 @@ class TestStorageService:
     async def test_upload_invalid_type(self, storage_service):
         content = b"test content"
         file = UploadFile(filename="test.exe", file=BytesIO(content), headers={"content-type": "application/x-msdownload"})
-        
+
         with pytest.raises(InvalidFileTypeError) as exc:
             await storage_service.upload_file(file)
         assert exc.value.status_code == 400
@@ -52,7 +52,7 @@ class TestStorageService:
 
     @pytest.mark.asyncio
     async def test_upload_too_large(self, storage_service):
-        content = b"a" * 2000  # 2KB > 1KB limit
+        content = b"\x89PNG\r\n\x1a\n" + b"a" * 2000  # valid PNG header + >1KB body
         file = UploadFile(filename="large.png", file=BytesIO(content), headers={"content-type": "image/png"})
         
         with pytest.raises(FileTooLargeError) as exc:
@@ -81,6 +81,35 @@ class TestStorageService:
             storage_service.validate_token(token)
         assert exc.value.status_code == 403
         assert "expired" in exc.value.detail
+
+    @pytest.mark.asyncio
+    async def test_upload_valid_jpeg(self, storage_service):
+        content = b"\xff\xd8\xff\xe0" + b"x" * 10
+        file = UploadFile(filename="photo.jpeg", file=BytesIO(content), headers={"content-type": "image/jpeg"})
+
+        path = await storage_service.upload_file(file, folder="test")
+
+        assert path.endswith(".jpeg")
+
+    @pytest.mark.asyncio
+    async def test_upload_valid_pdf(self, storage_service):
+        content = b"%PDF-1.4\n" + b"x" * 10
+        file = UploadFile(filename="doc.pdf", file=BytesIO(content), headers={"content-type": "application/pdf"})
+
+        path = await storage_service.upload_file(file, folder="test")
+
+        assert path.endswith(".pdf")
+
+    @pytest.mark.asyncio
+    async def test_upload_mismatched_signature_rejected(self, storage_service):
+        # JPEG bytes but declared as PNG — should be rejected
+        content = b"\xff\xd8\xff\xe0" + b"x" * 10
+        file = UploadFile(filename="image.png", file=BytesIO(content), headers={"content-type": "image/png"})
+
+        with pytest.raises(InvalidFileTypeError) as exc:
+            await storage_service.upload_file(file)
+        assert exc.value.status_code == 400
+        assert exc.value.error_code == "STORAGE_004"
 
     def test_invalid_token_signature(self, storage_service):
         file_path = "test/file.png"

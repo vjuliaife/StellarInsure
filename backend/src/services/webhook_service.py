@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import json
 import logging
+import time
 from datetime import datetime
 from typing import Any, Dict, List
 
@@ -29,7 +30,7 @@ def _generate_signature(payload: str, secret: str) -> str:
     ).hexdigest()
 
 
-def _deliver_single(webhook: Webhook, event_type: str, payload_str: str, db: Session) -> WebhookDelivery:
+def _deliver_single(webhook: Webhook, event_type: str, payload_str: str, db: Session, _sleep=time.sleep) -> WebhookDelivery:
     """Attempt to deliver a webhook event with retries."""
     delivery = WebhookDelivery(
         webhook_id=webhook.id,
@@ -79,6 +80,8 @@ def _deliver_single(webhook: Webhook, event_type: str, payload_str: str, db: Ses
                 delivery.id, attempt, max_retries, e,
             )
         db.commit()
+        if attempt < max_retries:
+            _sleep(settings.webhook_backoff_base * (2 ** (attempt - 1)))
 
     logger.error(
         "Webhook delivery exhausted retries: id=%s event=%s url=%s",

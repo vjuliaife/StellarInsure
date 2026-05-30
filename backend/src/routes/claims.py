@@ -317,6 +317,9 @@ async def update_claim_status(
     db.commit()
     db.refresh(claim)
 
+    if policy:
+        invalidate_policy_cache(policy.policyholder_id)
+
     event_type = "claim.approved" if approved else "claim.rejected"
     background_tasks.add_task(
         dispatch_webhook_event,
