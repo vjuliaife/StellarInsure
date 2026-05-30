@@ -1,3 +1,18 @@
+# [1.30.0](https://github.com/ChaoLing140/StellarInsure/compare/v1.29.0...v1.30.0) (2026-05-30)
+
+
+### Bug Fixes
+
+* preserve trigger condition builder value from saved draft ([ac4fe2a](https://github.com/ChaoLing140/StellarInsure/commit/ac4fe2a3f5e569fe40d9564a08f7b84821328013))
+* replace raw HTTPException with custom errors in storage service ([39794f8](https://github.com/ChaoLing140/StellarInsure/commit/39794f8abfc53fa47c0ad4a23fac518a08f4a45f))
+* resolve issues [#387](https://github.com/ChaoLing140/StellarInsure/issues/387), [#395](https://github.com/ChaoLing140/StellarInsure/issues/395), [#400](https://github.com/ChaoLing140/StellarInsure/issues/400), [#401](https://github.com/ChaoLing140/StellarInsure/issues/401) ([83b0c13](https://github.com/ChaoLing140/StellarInsure/commit/83b0c13a0d664cd105d91445752972a61fcf7172))
+
+
+### Features
+
+* add i18n support to policies page filters ([1436aac](https://github.com/ChaoLing140/StellarInsure/commit/1436aacbcec39bd92f6c36e7f784ed9b865657e3))
+* add i18n support to settings page ([985f176](https://github.com/ChaoLing140/StellarInsure/commit/985f176faeb28afcb380fefbe54ad8e1f1eef2a0))
+
 # [1.29.0](https://github.com/ChaoLing140/StellarInsure/compare/v1.28.1...v1.29.0) (2026-05-30)
 
 
