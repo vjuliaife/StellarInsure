@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Optional
+from enum import Enum
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
@@ -14,6 +15,15 @@ settings = get_settings()
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
+class TransactionType(str, Enum):
+    premium = "premium"
+    payout = "payout"
+    refund = "refund"
+
+class TransactionStatus(str, Enum):
+    pending = "pending"
+    successful = "successful"
+    failed = "failed"
 
 @router.get(
     "",
@@ -29,8 +39,8 @@ router = APIRouter(prefix="/transactions", tags=["transactions"])
 async def get_transactions(
     page: int = Query(1, ge=1, description="Page number (starts at 1)"),
     per_page: int = Query(10, ge=1, le=100, description="Items per page (max 100)"),
-    transaction_type: Optional[str] = Query(None, description="Filter by transaction type (e.g., premium, payout)"),
-    status: Optional[str] = Query(None, description="Filter by status (e.g., pending, successful, failed)"),
+    transaction_type: Optional[TransactionType] = Query(None, description="Filter by transaction type (e.g., premium, payout)"),
+    status: Optional[TransactionStatus] = Query(None, description="Filter by status (e.g., pending, successful, failed)"),
     start_date: Optional[datetime] = Query(None, description="Filter transactions from this date (ISO format)"),
     end_date: Optional[datetime] = Query(None, description="Filter transactions until this date (ISO format)"),
     current_user: User = Depends(get_current_active_user),

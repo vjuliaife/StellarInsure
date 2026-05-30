@@ -2,7 +2,7 @@ import os
 import logging
 from typing import List, Optional
 from pydantic_settings import BaseSettings
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from functools import lru_cache
 
 logger = logging.getLogger(__name__)
@@ -86,6 +86,15 @@ class Settings(BaseSettings):
         if v not in allowed:
             raise ValueError(f"log_level must be one of {allowed}")
         return v
+
+    @model_validator(mode="after")
+    def validate_production_secrets(self):
+        if self.environment == "production":
+            if self.jwt_secret_key == "your-secret-key-change-in-production":
+                raise ValueError("jwt_secret_key cannot be the default placeholder in production")
+            if self.storage_secret_key == "storage-secret-key-change-in-production":
+                raise ValueError("storage_secret_key cannot be the default placeholder in production")
+        return self
 
     @property
     def allowed_origins(self) -> List[str]:

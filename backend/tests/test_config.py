@@ -22,6 +22,30 @@ class TestSettingsValidation:
         with pytest.raises(Exception):
             Settings(log_level="INVALID", database_url="sqlite://", jwt_secret_key="k")
 
+    def test_production_rejects_default_jwt_secret(self):
+        from src.config import Settings
+        with pytest.raises(Exception) as excinfo:
+            Settings(environment="production", database_url="sqlite://")
+        assert "jwt_secret_key" in str(excinfo.value)
+        assert "your-secret-key-change-in-production" not in str(excinfo.value)
+
+    def test_production_accepts_custom_jwt_secret(self):
+        from src.config import Settings
+        s = Settings(environment="production", database_url="sqlite://", jwt_secret_key="custom", storage_secret_key="custom2")
+        assert s.jwt_secret_key == "custom"
+
+    def test_production_rejects_default_storage_secret(self):
+        from src.config import Settings
+        with pytest.raises(Exception) as excinfo:
+            Settings(environment="production", database_url="sqlite://", jwt_secret_key="custom")
+        assert "storage_secret_key" in str(excinfo.value)
+        assert "storage-secret-key-change-in-production" not in str(excinfo.value)
+
+    def test_production_accepts_custom_storage_secret(self):
+        from src.config import Settings
+        s = Settings(environment="production", database_url="sqlite://", jwt_secret_key="custom", storage_secret_key="custom2")
+        assert s.storage_secret_key == "custom2"
+
     def test_allowed_origins_development(self):
         from src.config import Settings
         s = Settings(environment="development", database_url="sqlite://", jwt_secret_key="k")

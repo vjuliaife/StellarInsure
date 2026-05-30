@@ -125,6 +125,20 @@ def test_get_transactions_filter_by_status(client, authenticated_user, db_sessio
     assert data["transactions"][0]["status"] == "successful"
 
 
+def test_get_transactions_rejects_invalid_type(client, authenticated_user):
+    """Test that invalid transaction types are rejected with 422"""
+    user, headers = authenticated_user
+    response = client.get("/transactions?transaction_type=invalid_type", headers=headers)
+    assert response.status_code == 422
+
+
+def test_get_transactions_rejects_invalid_status(client, authenticated_user):
+    """Test that invalid statuses are rejected with 422"""
+    user, headers = authenticated_user
+    response = client.get("/transactions?status=invalid_status", headers=headers)
+    assert response.status_code == 422
+
+
 def test_get_transactions_filter_by_date_range(client, authenticated_user, db_session):
     """Test filtering by date range"""
     user, headers = authenticated_user
