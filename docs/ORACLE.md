@@ -468,6 +468,187 @@ For sensitive data (health records, personal information):
    - Reveal only necessary information
    - Minimize data exposure
 
+## Signed Payload Schema
+
+Every oracle payload the relay service accepts has the following envelope fields:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `oracle_type` | string | yes | One of `"weather"`, `"flight"`, `"smart_contract"`, `"asset_price"` |
+| `timestamp` | integer | yes | Unix timestamp (seconds) when the data was collected |
+| `data` | object | yes | Type-specific measurement values (see oracle type sections above) |
+| `sources` | array | yes | One or more provider objects, each with `provider` (string) and `confidence` (float 0–1) |
+| `signature` | string | yes | Base64-encoded Ed25519 signature over the canonical payload (see below) |
+
+For type-specific fields (`location`, `flight`, `contract`, `asset`) see the data format examples in each oracle type section above.
+
+### Signature Algorithm
+
+The oracle node signs the payload as follows:
+
+1. Serialize the payload to UTF-8 JSON with the `signature` key **omitted**. Keys must be in the same order as the schema above; do not add whitespace.
+2. Sign the UTF-8 bytes with the oracle node's Stellar Ed25519 private key using `Keypair.sign()`.
+3. Base64-encode the 64-byte raw signature and set it as the `signature` field.
+
+```python
+import json, base64
+from stellar_sdk import Keypair
+
+keypair = Keypair.from_secret("S...")  # oracle node's signing key
+
+payload = {
+    "oracle_type": "weather",
+    "timestamp": 1714204800,
+    "data": {"temperature": -2.5, "rainfall_24h": 0.0, "wind_speed": 15.3, "humidity": 65},
+    "sources": [{"provider": "NOAA", "confidence": 0.95}],
+}
+
+canonical = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+payload["signature"] = base64.b64encode(keypair.sign(canonical)).decode()
+```
+
+The oracle node's public key **must** match the address registered on-chain for that oracle type (see `register_oracle` below). The relay service verifies the signature with `stellar_service.verify_stellar_signature(public_key, signature, canonical_payload)` before trusting the data.
+
+> **Important:** Signature verification is performed **off-chain** by the backend relay service. The on-chain `OracleProvider` implementations (`WeatherOracle`, `FlightOracle`, etc.) are dispatch stubs and do not re-verify signatures. Trust enforcement happens before data reaches the contract.
+
+### Complete Signed Weather Payload Example
+
+```json
+{
+  "oracle_type": "weather",
+  "location": {
+    "latitude": 40.7128,
+    "longitude": -74.0060,
+    "city": "New York"
+  },
+  "timestamp": 1714204800,
+  "data": {
+    "temperature": -2.5,
+    "rainfall_24h": 0.0,
+    "wind_speed": 15.3,
+    "humidity": 65
+  },
+  "sources": [
+    {"provider": "NOAA", "confidence": 0.95},
+    {"provider": "OpenWeatherMap", "confidence": 0.92}
+  ],
+  "signature": "BASE64_ED25519_SIG_OVER_PAYLOAD_WITHOUT_SIGNATURE_FIELD"
+}
+```
+
+---
+
+## Contract-Side Verification (End to End)
+
+### Prerequisites
+
+1. The contract must be initialised (`init`) with an admin address.
+2. A premium token and optionally a risk pool must be set via `set_premium_token` / `set_risk_pool`.
+3. An oracle address must be registered for each oracle type used.
+
+### Step 0 — Submit a Claim First
+
+`evaluate_oracle_trigger` requires the policy to already be in `ClaimPending` status. The policyholder must call `submit_claim` before the relay can trigger automatic evaluation:
+
+```rust
+// Policyholder submits a claim
+contract.submit_claim(&env, policy_id, claim_amount, proof)?;
+// Policy status is now ClaimPending
+```
+
+### Step 1 — Register the Oracle (admin)
+
+```rust
+// Register the oracle node's Stellar address on-chain
+contract.register_oracle(
+    &env,
+    admin,
+    symbol_short!("Weather"),     // oracle_type
+    oracle_node_address,          // must match signing keypair
+)?;
+```
+
+The registered address is stored by `storage::set_oracle_address` and checked before any oracle trigger evaluation.
+
+### Step 2 — Off-chain Relay Verifies Signature
+
+Before submitting data to the contract, the backend relay service verifies the oracle node's signature:
+
+```python
+is_valid = await stellar_service.verify_stellar_signature(
+    public_key=oracle_node_stellar_address,
+    signature=payload["signature"],
+    message=canonical_json_without_signature_field,
+)
+if not is_valid:
+    raise ValueError("Oracle signature verification failed — data rejected")
+```
+
+### Step 3 — Relay Calls `evaluate_oracle_trigger`
+
+```rust
+contract.evaluate_oracle_trigger(
+    &env,
+    policy_id,
+    symbol_short!("Weather"),   // oracle_type — must be registered
+    symbol_short!("temp"),      // parameter — passed to oracle provider
+)?;
+```
+
+Source: `smartcontract/src/lib.rs:507–593`
+
+### Step 4 — Contract Dispatches to Oracle Provider
+
+```rust
+// lib.rs:386–405
+pub fn verify_oracle_condition(env, oracle_type, parameter) -> Result<OracleResult, Error> {
+    if oracle_type == symbol_short!("Weather") {
+        WeatherOracle::verify_condition(&env, parameter)
+    } else if oracle_type == symbol_short!("Flight") {
+        FlightOracle::verify_condition(&env, parameter)
+    } else if oracle_type == symbol_short!("Price") {
+        PriceOracle::verify_condition(&env, parameter)
+    } else {
+        SmartContractOracle::verify_condition(&env, parameter)
+    }
+}
+```
+
+Each provider returns `OracleResult { is_verified: bool, details: String }`.
+
+### Step 5 — Auto-Approve Claim if Condition Met
+
+```rust
+// lib.rs:542
+if oracle_result.is_verified {
+    // Claim is approved, payout transferred, PolicyStatus → ClaimApproved
+    // AutomaticClaimTriggered and Payout events are emitted
+}
+```
+
+If `is_verified` is `false`, the contract returns `Error::OracleConditionNotMet` and the claim remains pending.
+
+### Full Call Chain Summary
+
+```
+Policyholder → submit_claim()
+                        ↓
+Backend relay: verify oracle signature (off-chain, stellar_service)
+                        ↓
+Admin registers oracle: register_oracle(oracle_type, oracle_address)
+                        ↓
+Relay → evaluate_oracle_trigger(policy_id, oracle_type, parameter)
+                        ↓
+Contract → verify_oracle_condition(oracle_type, parameter)
+                        ↓
+OracleProvider::verify_condition() → OracleResult { is_verified }
+                        ↓
+is_verified == true → claim approved + payout transferred
+is_verified == false → Error::OracleConditionNotMet
+```
+
+---
+
 ## Future Enhancements
 
 ### Chainlink Integration

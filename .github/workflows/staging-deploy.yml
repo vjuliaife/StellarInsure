@@ -33,6 +33,42 @@ jobs:
         if: ${{ secrets.STAGING_KUBECONFIG == '' }}
         run: echo "Set STAGING_KUBECONFIG secret to enable automated staging deploy."
 
+  smoke-test:
+    runs-on: ubuntu-latest
+    environment: staging
+    needs: deploy-staging
+    steps:
+      - name: Check backend health
+        if: ${{ secrets.STAGING_BACKEND_URL != '' }}
+        run: |
+          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" "$STAGING_BACKEND_URL/health")
+          echo "Backend /health → HTTP $STATUS"
+          [ "$STATUS" = "200" ]
+        env:
+          STAGING_BACKEND_URL: ${{ secrets.STAGING_BACKEND_URL }}
+
+      - name: Check frontend
+        if: ${{ secrets.STAGING_FRONTEND_URL != '' }}
+        run: |
+          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" "$STAGING_FRONTEND_URL/")
+          echo "Frontend / → HTTP $STATUS"
+          [ "$STATUS" = "200" ]
+        env:
+          STAGING_FRONTEND_URL: ${{ secrets.STAGING_FRONTEND_URL }}
+
+      - name: Check authenticated path returns 401
+        if: ${{ secrets.STAGING_BACKEND_URL != '' }}
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Accept: application/json" "$STAGING_BACKEND_URL/policies")
+          echo "GET /policies (no auth) → HTTP $STATUS"
+          [ "$STATUS" = "401" ]
+        env:
+          STAGING_BACKEND_URL: ${{ secrets.STAGING_BACKEND_URL }}
+
+      - name: Smoke test secrets reminder
+        if: ${{ secrets.STAGING_BACKEND_URL == '' }}
+        run: echo "Set STAGING_BACKEND_URL and STAGING_FRONTEND_URL to enable smoke tests."
+
   seed-staging-data:
     runs-on: ubuntu-latest
     environment: staging
