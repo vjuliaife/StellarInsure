@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     webhook_secret_key: str = "webhook-secret-key-change-in-production"
     webhook_max_retries: int = 3
     webhook_delivery_timeout: int = 30
+    webhook_max_per_user: int = 10
 
     # Logging
     log_level: str = "INFO"

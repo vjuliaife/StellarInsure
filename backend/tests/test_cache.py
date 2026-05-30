@@ -150,3 +150,73 @@ class TestPolicyCacheIntegration:
         list_response = client.get("/policies/", headers=auth_headers)
         assert list_response.status_code == 200
         assert list_response.json()["total"] >= 1
+
+
+class TestClaimCacheInvalidation:
+    """Test that claim submission invalidates policy cache."""
+
+    def test_create_claim_text_invalidates_policy_cache(
+        self, client, auth_user, auth_headers, policy_factory
+    ):
+        """Text claim creation should trigger policy cache invalidation."""
+        policy = policy_factory(auth_user, coverage_amount=1000.0)
+
+        import src.routes.claims as claims_module
+        from unittest.mock import patch
+
+        with patch.object(claims_module, "invalidate_policy_cache") as mock_invalidate:
+            response = client.post(
+                "/claims/",
+                headers=auth_headers,
+                json={
+                    "policy_id": policy.id,
+                    "claim_amount": 300.0,
+                    "proof": "Satellite weather evidence",
+                },
+            )
+
+            assert response.status_code == 201
+            mock_invalidate.assert_called_once_with(auth_user.id)
+
+    def test_create_claim_file_upload_invalidates_policy_cache(
+        self, client, auth_user, auth_headers, policy_factory
+    ):
+        """File upload claim creation should trigger policy cache invalidation."""
+        from io import BytesIO
+        policy = policy_factory(auth_user, coverage_amount=1000.0)
+
+        import src.routes.claims as claims_module
+        from unittest.mock import patch
+
+        with patch.object(claims_module, "invalidate_policy_cache") as mock_invalidate:
+            response = client.post(
+                "/claims/upload",
+                headers=auth_headers,
+                data={"policy_id": str(policy.id), "claim_amount": "275.0"},
+                files={"file": ("proof.png", BytesIO(b"png"), "image/png")},
+            )
+
+            assert response.status_code == 201
+            mock_invalidate.assert_called_once_with(auth_user.id)
+
+    def test_create_claim_failure_does_not_invalidate_cache(
+        self, client, auth_user, auth_headers
+    ):
+        """Failed claim creation should NOT trigger policy cache invalidation."""
+        import src.routes.claims as claims_module
+        from unittest.mock import patch
+
+        with patch.object(claims_module, "invalidate_policy_cache") as mock_invalidate:
+            # Non-existent policy
+            response = client.post(
+                "/claims/",
+                headers=auth_headers,
+                json={
+                    "policy_id": 99999,
+                    "claim_amount": 300.0,
+                    "proof": "Satellite weather evidence",
+                },
+            )
+
+            assert response.status_code == 404
+            mock_invalidate.assert_not_called()

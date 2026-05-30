@@ -22,6 +22,7 @@ from ..errors import (
 )
 from ..services.storage_service import storage_service
 from ..services.webhook_service import dispatch_webhook_event
+from ..cache import invalidate_policy_cache
 
 router = APIRouter(prefix="/claims", tags=["claims"])
 logger = logging.getLogger(__name__)
@@ -102,6 +103,8 @@ async def create_claim(
     db.commit()
     db.refresh(claim)
 
+    invalidate_policy_cache(current_user.id)
+
     background_tasks.add_task(
         dispatch_webhook_event,
         db=db,
@@ -173,6 +176,8 @@ async def create_claim_with_file(
     db.add(claim)
     db.commit()
     db.refresh(claim)
+
+    invalidate_policy_cache(current_user.id)
 
     background_tasks.add_task(
         dispatch_webhook_event,

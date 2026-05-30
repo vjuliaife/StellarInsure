@@ -6,6 +6,7 @@ from typing import List
 from fastapi import APIRouter, Depends, status, Query
 from sqlalchemy.orm import Session
 
+from ..config import get_settings
 from ..database import get_db
 from ..dependencies import get_current_active_user
 from ..errors import StellarInsureError
@@ -30,6 +31,11 @@ class WebhookNotFoundError(StellarInsureError):
 class WebhookDuplicateUrlError(StellarInsureError):
     def __init__(self, detail: str = "An active webhook with this URL already exists"):
         super().__init__(status.HTTP_409_CONFLICT, detail, "WEBHOOK_002")
+
+
+class WebhookLimitExceededError(StellarInsureError):
+    def __init__(self, detail: str = "Webhook limit reached for this user"):
+        super().__init__(status.HTTP_429_TOO_MANY_REQUESTS, detail, "WEBHOOK_003")
 
 
 def _format_webhook(webhook: Webhook) -> WebhookResponse:
@@ -60,6 +66,15 @@ async def create_webhook(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
+    settings = get_settings()
+    webhook_count = (
+        db.query(Webhook)
+        .filter(Webhook.user_id == current_user.id)
+        .count()
+    )
+    if webhook_count >= settings.webhook_max_per_user:
+        raise WebhookLimitExceededError()
+
     existing = (
         db.query(Webhook)
         .filter(Webhook.user_id == current_user.id, Webhook.url == body.url, Webhook.is_active == True)
